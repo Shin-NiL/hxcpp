@@ -38,7 +38,7 @@ Module hxLoadLibrary(String inLib)
 #endif
 
 void *hxFindSymbol(Module inModule, const char *inSymbol) { return (void *)GetProcAddress(inModule,inSymbol); }
-#elif (defined (IPHONE) || defined(EMSCRIPTEN)) && !defined(HXCPP_DLL_IMPORT) && !defined(HXCPP_DLL_EXPORT)
+#elif (defined (IPHONE) || defined(EMSCRIPTEN) || defined(STATIC_LINK)) && !defined(HXCPP_DLL_IMPORT) && !defined(HXCPP_DLL_EXPORT)
 
 typedef void *Module;
 Module hxLoadLibrary(const String &) { return 0; }
@@ -51,7 +51,7 @@ typedef void *Module;
 Module hxLoadLibrary(String inLib)
 {
    int flags = RTLD_GLOBAL;
-   #if defined(HXCPP_RTLD_LAZY) || defined(IPHONE) || defined(EMSCRIPTEN)
+   #if defined(HXCPP_RTLD_LAZY) || defined(IPHONE) || defined(EMSCRIPTEN) || defined(STATIC_LINK)
    flags |= RTLD_LAZY;
    #else
    flags |= RTLD_NOW;
@@ -277,7 +277,7 @@ typedef std::map<std::string,void *> RegistrationMap;
 RegistrationMap *sgRegisteredPrims=0;
 
 
-#if (defined(IPHONE) || defined(EMSCRIPTEN)) && !defined(HXCPP_DLL_IMPORT) && !defined(HXCPP_DLL_EXPORT)
+#if (defined(IPHONE) || defined(EMSCRIPTEN) || defined(STATIC_LINK)) && !defined(HXCPP_DLL_IMPORT) && !defined(HXCPP_DLL_EXPORT)
 
 Dynamic __loadprim(String inLib, String inPrim,int inArgCount)
 {
@@ -308,12 +308,13 @@ Dynamic __loadprim(String inLib, String inPrim,int inArgCount)
    return null();
 }
 
-void *__hxcpp_get_proc_address(String inLib, String inPrim,bool)
+void *__hxcpp_get_proc_address(String inLib, String inPrim,bool ,bool inQuietFail)
 {
    if (sgRegisteredPrims)
       return (*sgRegisteredPrims)[inPrim.__CStr()];
 
-   printf("Primitive not found : %s\n", inPrim.__CStr() );
+   if (!inQuietFail)
+      printf("Primitive not found : %s\n", inPrim.__CStr() );
    return 0;
 }
 
@@ -323,7 +324,7 @@ void *__hxcpp_get_proc_address(String inLib, String inPrim,bool)
 
 extern "C" void *hx_cffi(const char *inName);
 
-void *__hxcpp_get_proc_address(String inLib, String full_name,bool inNdllProc)
+void *__hxcpp_get_proc_address(String inLib, String full_name,bool inNdllProc,bool inQuietFail)
 {
 #ifdef ANDROID
    inLib = HX_CSTRING("lib") + inLib;
@@ -473,7 +474,7 @@ void *__hxcpp_get_proc_address(String inLib, String full_name,bool inNdllProc)
       }
       #endif
 
-      #if !defined(ANDROID) && !defined(HX_WINRT) && !defined(IPHONE) && !defined(EMSCRIPTEN)
+      #if !defined(ANDROID) && !defined(HX_WINRT) && !defined(IPHONE) && !defined(EMSCRIPTEN) && !defined(STATIC_LINK)
       if (!module)
       {
          String hxcpp = GetEnv("HXCPP");
@@ -540,7 +541,7 @@ void *__hxcpp_get_proc_address(String inLib, String full_name,bool inNdllProc)
    }
 
    FundFunc proc_query = (FundFunc)hxFindSymbol(module,full_name.__CStr());
-   if (!proc_query)
+   if (!proc_query && !inQuietFail)
    {
       #ifdef ANDROID
        __android_log_print(ANDROID_LOG_ERROR, "loader", "Could not find primitive %s in %p",
@@ -555,17 +556,14 @@ void *__hxcpp_get_proc_address(String inLib, String full_name,bool inNdllProc)
       return (void *)proc_query;
 
    void *proc = proc_query();
-   if (!proc)
+   if (!proc && !inQuietFail)
    {
-#ifdef ANDROID
-      __android_log_print(ANDROID_LOG_ERROR, "loader", "Could not identify primitive %s in %s\n", full_name.__CStr(),inLib.__CStr());
+      #ifdef ANDROID
+      __android_log_print(ANDROID_LOG_ERROR, "loader", "Could not identify primitive %s in %s",
+        full_name.__CStr(), inLib.__CStr() );
+      #else
       fprintf(stderr,"Could not identify primitive %s in %s\n", full_name.__CStr(),inLib.__CStr());
-#elif defined(ANDROID)
-   __android_log_print(ANDROID_LOG_ERROR, "loader", "Could not identify primitive %s in %s",
-        inPrim.__CStr(), inLib.__CStr() );
-#else
-   fprintf(stderr,"Could not identify primitive %s in %s\n", full_name.__CStr(),inLib.__CStr());
-#endif
+      #endif
    }
 
    return proc;

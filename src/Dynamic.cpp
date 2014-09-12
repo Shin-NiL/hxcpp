@@ -1,6 +1,7 @@
 #include <hxcpp.h>
 #include <math.h>
 #include <hxMath.h>
+#include <stdio.h>
 
 #ifdef GCW0
 #include <stdio.h>
@@ -329,6 +330,7 @@ static void sMarkStatics(HX_MARK_PARAMS) {
 	HX_MARK_MEMBER(hx::hxEnumBase_obj__mClass);
 	HX_MARK_MEMBER(hx::DynZero);
 	HX_MARK_MEMBER(hx::DynOne);
+	HX_MARK_MEMBER(hx::DynMinusOne);
 	HX_MARK_MEMBER(hx::DynTrue);
 	HX_MARK_MEMBER(hx::DynFalse);
 	HX_MARK_MEMBER(hx::DynEmptyString);

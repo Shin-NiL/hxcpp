@@ -6,19 +6,20 @@
    bool __Is(hx::Object *inObj) const { return dynamic_cast<OBJ_ *>(inObj)!=0; } \
 
 
-#define HX_DO_RTTI \
+#define HX_DO_RTTI_ALL \
    HX_DO_RTTI_BASE \
    static hx::ObjectPtr<Class_obj> __mClass; \
    hx::ObjectPtr<Class_obj > __GetClass() const { return __mClass; } \
-   static hx::ObjectPtr<Class_obj> &__SGetClass() { return __mClass; } \
-   Dynamic __Field(const ::String &inString, bool inCallProp); \
-   void __GetFields(Array< ::String> &outFields); \
-   Dynamic __SetField(const ::String &inString,const Dynamic &inValue, bool inCallProp); \
-   virtual int __GetType() const { return vtClass; } \
+   inline static hx::ObjectPtr<Class_obj> &__SGetClass() { return __mClass; } \
    inline operator super *() { return this; } 
 
+#define HX_DO_RTTI \
+   HX_DO_RTTI_ALL \
+   Dynamic __Field(const ::String &inString, bool inCallProp); \
+   Dynamic __SetField(const ::String &inString,const Dynamic &inValue, bool inCallProp); \
+   void __GetFields(Array< ::String> &outFields);
+
 #define HX_DO_INTERFACE_RTTI \
-   int __GetType() const { return vtClass; } \
    static hx::ObjectPtr<Class_obj> __mClass; \
    static hx::ObjectPtr<Class_obj> &__SGetClass() { return __mClass; } \
 	static void __register();
@@ -180,10 +181,10 @@ Dynamic class::func##_dyn() \
 static Dynamic Create##enum_obj(::String inName,hx::DynamicArray inArgs) \
 { \
    int idx =  enum_obj::__FindIndex(inName); \
-   if (idx<0) throw HX_INVALID_CONSTRUCTOR; \
+   if (idx<0) hx::Throw(HX_INVALID_CONSTRUCTOR); \
    int count =  enum_obj::__FindArgCount(inName); \
    int args = inArgs.GetPtr() ? inArgs.__length() : 0; \
-   if (args!=count)  throw HX_INVALID_ARG_COUNT; \
+   if (args!=count)  hx::Throw(HX_INVALID_ARG_COUNT); \
    if (args==0) { Dynamic result =(new enum_obj())->__Field(inName,true); if (result!=null()) return result; } \
    return hx::CreateEnum<enum_obj >(inName,idx,inArgs); \
 }
@@ -329,12 +330,25 @@ int main(Platform::NS::Array<Platform::NS::String^>^) \
    } \
    catch (Dynamic e){ \
       __hx_dump_stack(); \
+      return -1; \
    } \
    return 0; \
 }
 
 #elif defined(HX_WIN_MAIN)
 
+
+#ifdef HAVE_WINDOWS_H
+
+#define HX_BEGIN_MAIN \
+int __stdcall WinMain( HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR lpCmdLine, int nCmdShow) \
+{ \
+	HX_TOP_OF_STACK \
+	hx::Boot(); \
+	try{ \
+		__boot_all();
+
+#else
 
 #define HX_BEGIN_MAIN \
 extern "C" int __stdcall MessageBoxA(void *,const char *,const char *,int); \
@@ -346,13 +360,38 @@ int __stdcall WinMain( void * hInstance, void * hPrevInstance, const char *lpCmd
 	try{ \
 		__boot_all();
 
+#endif
+
 #define HX_END_MAIN \
 	} \
 	catch (Dynamic e){ \
 		__hx_dump_stack(); \
 		MessageBoxA(0,  e->toString().__CStr(), "Error", 0); \
+      return -1; \
 	} \
 	return 0; \
+}
+
+
+#elif defined(TIZEN)
+
+
+#define HX_BEGIN_MAIN \
+\
+extern "C" EXPORT_EXTRA int OspMain (int argc, char* pArgv[]){ \
+        HX_TOP_OF_STACK \
+        hx::Boot(); \
+        try{ \
+                __boot_all();
+
+#define HX_END_MAIN \
+        } \
+        catch (Dynamic e){ \
+                __hx_dump_stack(); \
+                printf("Error : %s\n",e->toString().__CStr()); \
+                return -1; \
+        } \
+        return 0; \
 }
 
 
@@ -372,6 +411,7 @@ int main(int argc,char **argv){ \
 	catch (Dynamic e){ \
 		__hx_dump_stack(); \
 		printf("Error : %s\n",e->toString().__CStr()); \
+      return -1; \
 	} \
 	return 0; \
 }

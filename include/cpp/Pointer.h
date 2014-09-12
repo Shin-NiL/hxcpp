@@ -57,6 +57,7 @@ public:
 
    operator Dynamic () { return CreateDynamicPointer((void *)ptr); }
    operator T * () { return ptr; }
+   T * get_raw() { return ptr; }
 
    inline void destroy() { delete ptr; }
    inline void destroyArray() { delete [] ptr; }
@@ -87,6 +88,14 @@ public:
    inline Function( T *inValue ) : call((T*)(inValue)) { }
    //inline Function( T *inValue ) : call(inValue) { }
    inline Function( AutoCast inValue ) : call( (T*)inValue.value) { }
+   inline Function( const hx::AnyCast &inValue ) : call( (T*)inValue.mPtr) { }
+
+   template<typename FROM>
+   inline static Function __new(FROM from)
+   {
+      return Function(from);
+   }
+
    inline Function operator=( const Function &inRHS ) { return call = inRHS.call; }
    inline Dynamic operator=( Dynamic &inValue )
    {
@@ -99,6 +108,7 @@ public:
 
    operator Dynamic () { return CreateDynamicPointer((void *)call); }
    operator T * () { return call; }
+   operator void * () { return (void *)call; }
 
    inline T &get_call() { return *call; }
 
@@ -152,6 +162,8 @@ public:
 
    template<typename T>
 	inline static Pointer<T> fromPointer(T *value)  { return Pointer<T>(value); }
+   template<typename T>
+	inline static Pointer<T> fromPointer(const T *value)  { return Pointer<T>(value); }
 
    inline static AutoCast fromHandle(Dynamic inValue, String inKind)
    {

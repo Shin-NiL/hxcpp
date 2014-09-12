@@ -69,12 +69,12 @@ HXCPP_EXTERN_CLASS_ATTRIBUTES int           __hxcpp_register_prim(const HX_CHAR 
 
 // Get function pointer from dll file
 HXCPP_EXTERN_CLASS_ATTRIBUTES Dynamic __loadprim(String inLib, String inPrim,int inArgCount);
-HXCPP_EXTERN_CLASS_ATTRIBUTES void *__hxcpp_get_proc_address(String inLib, String inPrim,bool inNdllProc=true);
+HXCPP_EXTERN_CLASS_ATTRIBUTES void *__hxcpp_get_proc_address(String inLib, String inPrim,bool inNdll, bool inQuietFail=false);
 HXCPP_EXTERN_CLASS_ATTRIBUTES void __hxcpp_run_dll(String inLib, String inPrim);
 // Can assign to function pointer without error
-inline hx::AnyCast __hxcpp_cast_get_proc_address(String inLib, String inPrim)
+inline hx::AnyCast __hxcpp_cast_get_proc_address(String inLib, String inPrim,bool inQuietFail=false)
 {
-   return hx::AnyCast(__hxcpp_get_proc_address(inLib,inPrim,false));
+   return hx::AnyCast(__hxcpp_get_proc_address(inLib,inPrim,false,inQuietFail));
 }
 
 HXCPP_EXTERN_CLASS_ATTRIBUTES String __hxcpp_get_kind(Dynamic inObject);
@@ -96,13 +96,20 @@ HXCPP_EXTERN_CLASS_ATTRIBUTES String __hxcpp_utf8_string_to_char_bytes(String &i
 
 // --- IntHash ----------------------------------------------------------------------
 
-HXCPP_EXTERN_CLASS_ATTRIBUTES hx::Object   *__int_hash_create();
-HXCPP_EXTERN_CLASS_ATTRIBUTES void          __int_hash_set(Dynamic inHash,int inKey,const Dynamic &value);
-HXCPP_EXTERN_CLASS_ATTRIBUTES Dynamic       __int_hash_get(Dynamic inHash,int inKey);
-HXCPP_EXTERN_CLASS_ATTRIBUTES bool          __int_hash_exists(Dynamic inHash,int inKey);
-HXCPP_EXTERN_CLASS_ATTRIBUTES bool          __int_hash_remove(Dynamic inHash,int inKey);
-HXCPP_EXTERN_CLASS_ATTRIBUTES Dynamic       __int_hash_keys(Dynamic inHash);
-HXCPP_EXTERN_CLASS_ATTRIBUTES Dynamic       __int_hash_values(Dynamic inHash);
+HXCPP_EXTERN_CLASS_ATTRIBUTES inline hx::Object   *__int_hash_create() { return 0; }
+HXCPP_EXTERN_CLASS_ATTRIBUTES void          __int_hash_set(Dynamic &ioHash,int inKey,const Dynamic &value);
+HXCPP_EXTERN_CLASS_ATTRIBUTES Dynamic       __int_hash_get(Dynamic &ioHash,int inKey);
+HXCPP_EXTERN_CLASS_ATTRIBUTES bool          __int_hash_exists(Dynamic &ioHash,int inKey);
+HXCPP_EXTERN_CLASS_ATTRIBUTES bool          __int_hash_remove(Dynamic &ioHash,int inKey);
+HXCPP_EXTERN_CLASS_ATTRIBUTES Dynamic       __int_hash_keys(Dynamic &ioHash);
+HXCPP_EXTERN_CLASS_ATTRIBUTES Dynamic       __int_hash_values(Dynamic &ioHash);
+// Typed IntHash access...
+HXCPP_EXTERN_CLASS_ATTRIBUTES void          __int_hash_set_int(Dynamic &ioHash,int inKey,int inValue);
+HXCPP_EXTERN_CLASS_ATTRIBUTES void          __int_hash_set_string(Dynamic &ioHash,int inKey,::String inValue);
+HXCPP_EXTERN_CLASS_ATTRIBUTES void          __int_hash_set_float(Dynamic &ioHash,int inKey,Float inValue);
+HXCPP_EXTERN_CLASS_ATTRIBUTES int           __int_hash_get_int(Dynamic &ioHash,int inKey);
+HXCPP_EXTERN_CLASS_ATTRIBUTES ::String      __int_hash_get_string(Dynamic &ioHash,int inKey);
+HXCPP_EXTERN_CLASS_ATTRIBUTES Float         __int_hash_get_float(Dynamic &ioHash,int inKey);
 
 
 // --- Date --------------------------------------------------------------------------
@@ -172,6 +179,7 @@ inline int __hxcpp_memory_get_i16(Array<unsigned char> inBuffer ,int addr) { ret
 inline int __hxcpp_memory_get_i32(Array<unsigned char> inBuffer ,int addr) { return *(int *)(inBuffer->GetBase()+addr); }
 inline int __hxcpp_memory_get_ui16(Array<unsigned char> inBuffer ,int addr) { return *(unsigned short *)(inBuffer->GetBase()+addr); }
 inline int __hxcpp_memory_get_ui32(Array<unsigned char> inBuffer ,int addr) { return *(unsigned int *)(inBuffer->GetBase()+addr); }
+inline float __hxcpp_memory_get_f32(Array<unsigned char> inBuffer ,int addr) { return *(float *)(inBuffer->GetBase()+addr); }
 
 inline void __hxcpp_memory_set_byte(Array<unsigned char> inBuffer ,int addr,int v) { inBuffer->GetBase()[addr] = v; }
 inline void __hxcpp_memory_set_double(Array<unsigned char> inBuffer ,int addr,double v) { *(double *)(inBuffer->GetBase()+addr) = v; }
@@ -180,6 +188,7 @@ inline void __hxcpp_memory_set_i16(Array<unsigned char> inBuffer ,int addr,int v
 inline void __hxcpp_memory_set_i32(Array<unsigned char> inBuffer ,int addr,int v) { *(int *)(inBuffer->GetBase()+addr) = v; }
 inline void __hxcpp_memory_set_ui16(Array<unsigned char> inBuffer ,int addr,int v) { *(unsigned short *)(inBuffer->GetBase()+addr) = v; }
 inline void __hxcpp_memory_set_ui32(Array<unsigned char> inBuffer ,int addr,int v) { *(unsigned int *)(inBuffer->GetBase()+addr) = v; }
+inline void __hxcpp_memory_set_f32(Array<unsigned char> inBuffer ,int addr,float v) { *(float *)(inBuffer->GetBase()+addr) = v; }
 
 
 // Uses global pointer...
@@ -196,6 +205,7 @@ inline int __hxcpp_memory_get_i16(int addr) { return *(short *)(__hxcpp_memory+a
 inline int __hxcpp_memory_get_i32(int addr) { return *(int *)(__hxcpp_memory+addr); }
 inline int __hxcpp_memory_get_ui16(int addr) { return *(unsigned short *)(__hxcpp_memory+addr); }
 inline int __hxcpp_memory_get_ui32(int addr) { return *(unsigned int *)(__hxcpp_memory+addr); }
+inline float __hxcpp_memory_get_f32(int addr) { return *(float *)(__hxcpp_memory+addr); }
 
 inline void __hxcpp_memory_set_byte(int addr,int v) { __hxcpp_memory[addr] = v; }
 inline void __hxcpp_memory_set_double(int addr,double v) { *(double *)(__hxcpp_memory+addr) = v; }
@@ -204,8 +214,7 @@ inline void __hxcpp_memory_set_i16(int addr,int v) { *(short *)(__hxcpp_memory+a
 inline void __hxcpp_memory_set_i32(int addr,int v) { *(int *)(__hxcpp_memory+addr) = v; }
 inline void __hxcpp_memory_set_ui16(int addr,int v) { *(unsigned short *)(__hxcpp_memory+addr) = v; }
 inline void __hxcpp_memory_set_ui32(int addr,int v) { *(unsigned int *)(__hxcpp_memory+addr) = v; }
-
-
+inline void __hxcpp_memory_set_f32(int addr,float v) { *(float *)(__hxcpp_memory+addr) = v; }
 
 
 #endif

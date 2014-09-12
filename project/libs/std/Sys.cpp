@@ -621,16 +621,16 @@ static value sys_read_dir( value p) {
 			break;
 	}
 	FindClose(handle);
-	gc_exit_blocking();
 #elif !defined(EPPC)
 	DIR *d;
 	struct dirent *e;
+   const char *name = val_string(p);
 	gc_enter_blocking();
-	d = opendir(val_string(p));
+	d = opendir(name);
 	if( d == NULL )
 	{
 		gc_exit_blocking();
-		return alloc_null();
+      val_throw(alloc_string("Invalid directory"));
 	}
 	while( true ) {
 		e = readdir(d);
