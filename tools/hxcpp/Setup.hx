@@ -98,6 +98,35 @@ class Setup
       }
    }
 
+   public static function setupMingw(ioDefines:Hash<String>)
+   {
+      // Setup MINGW_ROOT or fail
+      if (!ioDefines.exists("MINGW_ROOT"))
+      {
+       
+         var haxelib = PathManager.getHaxelib("minimingw","",false);
+         if (haxelib!=null && haxelib!="")
+         {
+            ioDefines.set("MINGW_ROOT", haxelib);
+            Log.v('Using haxelib version of MinGW, $haxelib');
+            return;
+         }
+
+         var guesses = ["c:/MinGW"];
+         for(guess in guesses )
+         {
+            if (FileSystem.exists(guess))
+            {
+               ioDefines.set("MINGW_ROOT", guess);
+               Log.v('Using default version of MinGW, $guess');
+               return;
+            }
+         }
+
+         Log.error('Could not guess MINGW_ROOT (tried $guesses) - please set explicitly');
+      }
+   }
+
    public static function isRaspberryPi()
    {
       var proc = new Process("uname",["-a"]);
@@ -155,6 +184,10 @@ class Setup
       {
          setupMSVC(ioDefines, ioDefines.exists("HXCPP_M64"));
       }
+      else if (inWhat=="mingw")
+      {
+         setupMingw(ioDefines);
+      }
       else
       {
          Log.error('Unknown setup feature "$inWhat"');
@@ -165,13 +198,15 @@ class Setup
    static public function setupAndroidNdk(defines:Map<String,String>)
    {
       var root:String = null;
+      
+      if (Log.verbose) Log.println("");
 
       if (!defines.exists("ANDROID_NDK_ROOT"))
       {
          if (defines.exists("ANDROID_NDK_DIR"))
          {
             root = Setup.findAndroidNdkRoot( defines.get("ANDROID_NDK_DIR") );
-            Log.info("", "Using found NDK root \"" + root + "\"");
+            Log.info("", "\x1b[33;1mDetected Android NDK root: " + root + "\x1b[0m");
 
             Sys.putEnv("ANDROID_NDK_ROOT", root);
             defines.set("ANDROID_NDK_ROOT", root);
@@ -185,7 +220,22 @@ class Setup
       else
       {
          root = defines.get("ANDROID_NDK_ROOT");
-         Log.info("", "Using specified NDK root \"" + root + "\"");
+         Log.info("", "\x1b[33;1mUsing Android NDK root: " + root + "\x1b[0m");
+      }
+      
+      var found = false;
+      for(i in 6...20)
+         if (defines.exists("NDKV" + i))
+         {
+            found = true;
+            Log.info("", "\x1b[33;1mUsing Android NDK r" + i + "\x1b[0m");
+            break;
+         }
+      if (!found)
+      {
+         var version = Setup.getNdkVersion( defines.get("ANDROID_NDK_ROOT") );
+         Log.info("", "\x1b[33;1mDetected Android NDK r" + version + "\x1b[0m");
+         defines.set("NDKV" + version, "1" );
       }
 
       // Find toolchain
@@ -212,7 +262,7 @@ class Setup
             if (bestVer!="")
             {
                defines.set("TOOLCHAIN_VERSION",bestVer);
-               Log.info("", "Found TOOLCHAIN_VERSION " + bestVer);
+               Log.info("", "\x1b[33;1mDetected Android toolchain: arm-linux-androideabi-" + bestVer + "\x1b[0m");
             }
          }
          catch(e:Dynamic) { }
@@ -223,36 +273,34 @@ class Setup
       {
          var prebuilt =  root+"/toolchains/arm-linux-androideabi-" + defines.get("TOOLCHAIN_VERSION") + "/prebuilt";
          var files = FileSystem.readDirectory(prebuilt);
+         for (file in files)
+         {  
+            if (!FileSystem.isDirectory (prebuilt + "/" + file))
+            {
+               files.remove (file);
+            }
+         }
          if (files.length==1)
          {
             defines.set("ANDROID_HOST", files[0]);
-            Log.info("", "Found ANDROID_HOST " + files[0]);
+            Log.info("", "\x1b[33;1mDetected Android host: " + files[0] + "\x1b[0m");
          }
          else
          {
-            Log.info("", "Could not work out ANDROID_HOST (" + files + ") - using default");
+            Log.info("", "\x1b[33;1mCould not detect ANDROID_HOST (" + files + ") - using default\x1b[0m");
          }
       }
       catch(e:Dynamic) { }
 
-      var found = false;
-      for(i in 6...20)
-         if (defines.exists("NDKV" + i))
-         {
-            found = true;
-            Log.info("", "Using specified android NDK " + i);
-            break;
-         }
-      if (!found)
-      {
-         var version = Setup.getNdkVersion( defines.get("ANDROID_NDK_ROOT") );
-         Log.info("", "Deduced android NDK " + version);
-         defines.set("NDKV" + version, "1" );
-      }
-
+      var androidPlatform = 5;
       if (defines.exists("PLATFORM"))
       {
-         Log.info("", "Using specified android PLATFORM " + defines.get("PLATFORM"));
+         var platform = defines.get("PLATFORM");
+         var id = Std.parseInt( platform.substr("android-".length) );
+         if (id==0 || id==null)
+            Log.error('Badly formed android PLATFORM "$platform" - should be like android-123');
+         androidPlatform = id;
+         Log.info("", "\x1b[33;1mUsing Android NDK platform: " + defines.get("PLATFORM") + "\x1b[0m");
       }
       else
       {
@@ -273,13 +321,16 @@ class Setup
 
          if (best==0)
          {
-            Log.error("Could not find NDK platform in \"" + base + "\"");
+            Log.error("Could not detect Android API platforms in \"" + base + "\"");
             //throw "Could not find platform in " + base;
          }
 
-         Log.info("", "Using newest NDK platform: " + best);
+         Log.info("", "\x1b[33;1mUsing newest Android NDK platform: " + best + "\x1b[0m");
          defines.set("PLATFORM", "android-" + best);
+         androidPlatform = best;
       }
+      defines.set("ANDROID_PLATFORM_DEFINE", "-DHXCPP_ANDROID_PLATFORM=" + androidPlatform);
+      if (Log.verbose) Log.println("");
    }
 
    public static function setupBlackBerryNativeSDK(ioDefines:Hash<String>)
@@ -334,6 +385,10 @@ class Setup
                      }
                      else
                      {
+                        value = StringTools.replace (value, "$BASE_DIR", ioDefines.get ("BLACKBERRY_NDK_ROOT"));
+                        value = StringTools.replace (value, "%BASE_DIR%", ioDefines.get ("BLACKBERRY_NDK_ROOT"));
+                        value = StringTools.replace (value, "$TARGET", "qnx6");
+                        value = StringTools.replace (value, "%TARGET%", "qnx6");
                         value = StringTools.replace (value, "$QNX_HOST_VERSION", Sys.getEnv("QNX_HOST_VERSION"));
                         value = StringTools.replace (value, "$QNX_TARGET_VERSION", Sys.getEnv("QNX_TARGET_VERSION"));
                         value = StringTools.replace (value, "%QNX_HOST_VERSION%", Sys.getEnv("QNX_HOST_VERSION"));
@@ -381,8 +436,8 @@ class Setup
                         //Sys.println("Found VS variable " + env);
                      }
                   }
-                  Log.error("Could not find specified MSCV version: " + ival);
-                  //throw "Could not find specified MSCV version " + ival;
+                  Log.error("Could not find specified MSVC version: " + ival);
+                  //throw "Could not find specified MSVC version " + ival;
                }
                ioDefines.set("HXCPP_MSVC", where );
                Sys.putEnv("HXCPP_MSVC", where);

@@ -52,8 +52,11 @@ using namespace hx;
 
 // --- GC helper
 
-Class __StringClass;
+hx::Class __StringClass;
 
+String  sEmptyString = HX_CSTRING("");
+String  sConstStrings[256];
+Dynamic sConstDynamicStrings[256];
 
 static int UTF8Bytes(int c)
 {
@@ -194,6 +197,7 @@ Array<int> __hxcpp_utf8_string_to_char_array(String &inString)
    return result;
 }
 
+
 String __hxcpp_char_bytes_to_utf8_string(String &inBytes)
 {
    int len = inBytes.length;
@@ -250,7 +254,7 @@ static HX_CHAR *GCStringDup(const HX_CHAR *inStr,int inLen, int *outLen=0)
    {
       if (outLen)
          outLen = 0;
-      return 0;
+      return (HX_CHAR *)sEmptyString.__s;
    }
 
    if (inLen==-1)
@@ -344,6 +348,14 @@ String::String(const double &inRHS)
 }
 
 
+String::String(const cpp::Int64 &inRHS)
+{
+   HX_CHAR buf[100];
+   SPRINTF(buf,100,"%lld",inRHS);
+   buf[99]='\0';
+   __s = GCStringDup(buf,-1,&length);
+}
+
 String::String(const float &inRHS)
 {
    HX_CHAR buf[100];
@@ -362,6 +374,36 @@ String::String(const bool &inRHS)
    {
       *this = HX_CSTRING("false");
    }
+}
+
+
+unsigned int String::hash() const
+{
+   if (__s==0) return 0;
+   if ( (((unsigned int *)__s)[-1] & HX_GC_NO_HASH_MASK) == HX_GC_CONST_ALLOC_BIT)
+   {
+       #ifdef HXCPP_PARANOID
+         unsigned int result = 0;
+         for(int i=0;i<length;i++)
+            result = result*223 + ((unsigned char *)__s)[i];
+
+         if  ( ((unsigned int *)__s)[-2] != result )
+         {
+             printf("Bad string hash for %s\n", __s );
+             printf(" Is %08x\n", result );
+             printf(" Baked %08x\n",  ((unsigned int *)__s)[-2]  );
+             printf(" Mark %08x\n",    ((unsigned int *)__s)[-1]  );
+             throw Dynamic(HX_CSTRING("Bad Hash!"));
+         }
+      #endif
+      return ((unsigned int *)__s)[-2];
+   }
+
+   unsigned int result = 0;
+   for(int i=0;i<length;i++)
+      result = result*223 + ((unsigned char *)__s)[i];
+
+   return result;
 }
 
 
@@ -564,45 +606,19 @@ Dynamic String::charCodeAt(int inPos) const
 
 String String::fromCharCode( int c )
 {
-   char buf[2];
-   buf[0] = c;
-   buf[1] = '\0';
-   return String( GCStringDup(buf,1,0), 1 );
-   #if 0
-   #ifdef HX_UTF8_STRINGS
-   int len = 0;
-   char buf[5];
+   int idx = c<0 ? c+256 : c;
+   if (idx<0 || idx>255)
+      return null();
 
-      if( c <= 0x7F )
-         buf[len++] = (c);
-      else if( c <= 0x7FF )
-      {
-         buf[len++] = ( 0xC0 | (c >> 6) );
-         buf[len++] = ( 0x80 | (c & 63) );
-      }
-      else if( c <= 0xFFFF )
-      {
-         buf[len++] = ( 0xE0 | (c >> 12) );
-         buf[len++] = ( 0x80 | ((c >> 6) & 63) );
-         buf[len++] = ( 0x80 | (c & 63) );
-      }
-      else
-      {
-         buf[len++] = ( 0xF0 | (c >> 18) );
-         buf[len++] = ( 0x80 | ((c >> 12) & 63) );
-         buf[len++] = ( 0x80 | ((c >> 6) & 63) );
-         buf[len++] = ( 0x80 | (c & 63) );
-      }
-   buf[len] = '\0';
-   return String( GCStringDup(buf,len,0), len );
-
-   #else
-   wchar_t *result = hx::NewString(1);
-   result[0] = c;
-   result[1] = '\0';
-   return String(result,1);
-   #endif
-   #endif
+   if (!sConstStrings[idx].__s)
+   {
+      HX_CHAR buf[2];
+      buf[0] = c;
+      buf[1] = '\0';
+      sConstStrings[idx].__s = (HX_CHAR *)InternalCreateConstBuffer(buf,2,true);
+      sConstStrings[idx].length = 1;
+   }
+   return sConstStrings[idx];
 }
 
 String String::charAt( int at ) const
@@ -645,10 +661,13 @@ void __hxcpp_bytes_of_string(Array<unsigned char> &outBytes,const String &inStri
    #endif
 }
 
-void __hxcpp_string_of_bytes(Array<unsigned char> &inBytes,String &outString,int pos,int len)
+void __hxcpp_string_of_bytes(Array<unsigned char> &inBytes,String &outString,int pos,int len,bool inCopyPointer)
 {
    #ifdef HX_UTF8_STRINGS
-   outString = String( GCStringDup(inBytes->GetBase()+pos, len, 0), len);
+   if (inCopyPointer)
+      outString = String( (const HX_CHAR *)inBytes->GetBase(), inBytes->length);
+   else
+      outString = String( GCStringDup(inBytes->GetBase()+pos, len, 0), len);
    #else
    const unsigned char *ptr = (unsigned char *)inBytes->GetBase() + pos;
    const unsigned char *last = ptr + len;
@@ -962,7 +981,7 @@ DEFINE_STRING_FUNC0(toLowerCase);
 DEFINE_STRING_FUNC0(toUpperCase);
 DEFINE_STRING_FUNC0(toString);
 
-Dynamic String::__Field(const String &inString, bool inCallProp)
+Dynamic String::__Field(const String &inString, hx::PropertyAccess inCallProp)
 {
    if (HX_FIELD_EQ(inString,"length")) return length;
    if (HX_FIELD_EQ(inString,"charAt")) return charAt_dyn();
@@ -1014,13 +1033,13 @@ inline double _wtof(const wchar_t *inStr)
    for(int i=0;i<100 && inStr[i];i++)
       buf[i] = inStr[i];
    buf[i] = '\0';
-   return atof(buf);
+   return strtod(buf, 0);
    #else
    return wcstod(inStr,0);
    #endif
 }
 
-#ifdef ANDROID
+#ifdef HX_ANDROID
 int my_wtol(const wchar_t *inStr,wchar_t ** end, int inBase)
 {
    char buf[101];
@@ -1054,9 +1073,13 @@ inline int _wtoi(const wchar_t *inStr)
 class StringData : public hx::Object
 {
 public:
+   inline void *operator new( size_t inSize, hx::NewObjectType inAlloc=hx::NewObjContainer)
+      { return hx::Object::operator new(inSize,inAlloc); }
+
+
    StringData(String inValue) : mValue(inValue) {};
 
-   Class __GetClass() const { return __StringClass; }
+   hx::Class __GetClass() const { return __StringClass; }
    bool __Is(hx::Object *inClass) const { return dynamic_cast< StringData *>(inClass); }
 
    virtual int __GetType() const { return vtString; }
@@ -1066,7 +1089,11 @@ public:
    {
       if (!mValue.__s) return 0;
       #ifdef HX_UTF8_STRINGS
-      return atof(mValue.__s);
+         #ifdef HX_ANDROID
+         return strtod(mValue.__s,0);
+         #else
+         return atof(mValue.__s);
+         #endif
       #else
       return _wtof(mValue.__s);
       #endif
@@ -1101,7 +1128,7 @@ public:
       return mValue.compare( const_cast<hx::Object*>(inRHS)->toString() );
    }
 
-   Dynamic __Field(const String &inString, bool inCallProp)
+   Dynamic __Field(const String &inString, hx::PropertyAccess inCallProp)
    {
       return mValue.__Field(inString, inCallProp);
    }
@@ -1110,11 +1137,28 @@ public:
    String mValue;
 };
 
-Class &GetStringClass() { return __StringClass; }
+hx::Class &GetStringClass() { return __StringClass; }
 
 }
 
-hx::Object *String::__ToObject() const { return new StringData(*this); }
+hx::Object *String::__ToObject() const
+{
+   if (!__s)
+      return 0;
+
+   if (length==1)
+   {
+      int idx = ((unsigned char *)__s)[0];
+      if (sConstDynamicStrings[idx].mPtr)
+         return  sConstDynamicStrings[idx].mPtr;
+
+      return sConstDynamicStrings[idx].mPtr = new (hx::NewObjConst)StringData(fromCharCode(idx));
+   }
+
+   NewObjectType type = ((unsigned int *)__s)[-1] &  HX_GC_CONST_ALLOC_BIT ?
+                           NewObjAlloc : NewObjContainer;
+   return new (type) StringData(*this);
+}
 
 
 

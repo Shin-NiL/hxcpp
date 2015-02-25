@@ -54,10 +54,6 @@ void RegisterClass(const String &inClassName, Class inClass)
 
 
 
-}
-
-using namespace hx;
-
 // -------- Class ---------------------------------------
 
 
@@ -244,7 +240,7 @@ bool Class_obj::__HasField(const String &inString)
    return false;
 }
 
-Dynamic Class_obj::__Field(const String &inString, bool inCallProp)
+Dynamic Class_obj::__Field(const String &inString, hx::PropertyAccess inCallProp)
 {
    if (inString==HX_CSTRING("__meta__"))
       return __meta__;
@@ -255,7 +251,7 @@ Dynamic Class_obj::__Field(const String &inString, bool inCallProp)
    return instance->__Field(inString, inCallProp);
 }
 
-Dynamic Class_obj::__SetField(const String &inString,const Dynamic &inValue, bool inCallProp)
+Dynamic Class_obj::__SetField(const String &inString,const Dynamic &inValue, hx::PropertyAccess inCallProp)
 {
    // Not the most efficient way of doing this!
    if (!mConstructEmpty)
@@ -303,8 +299,6 @@ const hx::StaticInfo* Class_obj::GetStaticStorage(String inName)
 #endif
 
 
-namespace hx
-{
 
 void MarkClassStatics(hx::MarkContext *__inCtx)
 {
@@ -355,6 +349,6 @@ void VisitClassStatics(hx::VisitContext *__inCtx)
 #endif
 
 
-}
+} // End namespace hx
 
 

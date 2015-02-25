@@ -1,4 +1,24 @@
 
+* Add Windows64 binaries
+* Make compares between Dynamic and numeric types false, unless the Dynamic is actaully numeric
+------------------------------------------------------------
+* Even more optimizations for hashes
+* Some more optimizations for small hashes
+* Fix for google changing inlining in platform21 headers (atof, rand, srand)
+* Re-tuned Hash for small objects too (improves Anon object perforamce)
+* Reverted change that automatically threw 'BadCast'.  Now required HXCPP_STRICT_CASTS
+------------------------------------------------------------
+* Cached dynamic versions of small ints and 1-char-strings for speed
+* Added support for weak hashes - needs latest haxe version
+* Use internal hash structure for maps - now faster.  New version of haxe makes it faster still.
+* Changed the way development versions are bootstrapped to avoid committing binaries
+* Improved mingw support
+* Dont append -debug to dll name
+* Reorder xml includes to allow early parts to correctly influence older parts
+* Fix busy wait in semaphore lock
+* Fixed GC issue when constructing exrernal primitive objects
+* Added armv7s and arm64 targets for ios
+* Some fixes for neko cffi - wstring and warning for neko_init
 * Fix file read (and copy) from thread
 ------------------------------------------------------------
 * Compile fix for blackberry

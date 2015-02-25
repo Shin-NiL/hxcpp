@@ -12,6 +12,10 @@ struct AutoCast
 };
 
 Dynamic CreateDynamicPointer(void *inValue);
+Dynamic CreateDynamicStruct(const void *inValue, int inSize);
+
+template<typename T> class Reference;
+
 
 template<typename T>
 class Pointer
@@ -19,10 +23,10 @@ class Pointer
 public:
    T *ptr;
 
-   inline Pointer( ) { }
+   inline Pointer( ) : ptr(0) { }
    inline Pointer( const Pointer &inRHS ) : ptr(inRHS.ptr) {  }
    inline Pointer( const Dynamic &inRHS) { ptr = inRHS==null()?0: (T*)inRHS->__GetHandle(); }
-   inline Pointer( const null &inRHS ) { }
+   inline Pointer( const null &inRHS ) : ptr(0) { }
    inline Pointer( const T *inValue ) : ptr( (T*) inValue) { }
    //inline Pointer( T *inValue ) : ptr(inValue) { }
    inline Pointer( AutoCast inValue ) : ptr( (T*)inValue.value) { }
@@ -30,6 +34,7 @@ public:
    inline Dynamic operator=( Dynamic &inValue )
    {
       ptr = inValue==null() ? 0 : (T*) inValue->__GetHandle();
+      return inValue;
    }
    inline Dynamic operator=( null &inValue ) { ptr=0; return inValue; }
    inline AutoCast reinterpret() { return AutoCast(ptr); }
@@ -73,6 +78,82 @@ template<typename T>
 inline bool operator == (const null &, Pointer<T> inPtr) { return inPtr.ptr==0; }
 template<typename T>
 inline bool operator != (const null &, Pointer<T> inPtr) { return inPtr.ptr!=0; }
+
+
+
+template<typename T>
+class Reference : public Pointer<T>
+{
+   using Pointer<T>::ptr;
+
+public:
+
+   inline Reference( const T &inRHS ) : Pointer<T>(&inRHS) {  }
+   inline Reference( T &inRHS ) : Pointer<T>(&inRHS) {  }
+
+   inline Reference( ) : Pointer<T>(0) { }
+   inline Reference( const Reference &inRHS ) : Pointer<T>(inRHS.ptr) {  }
+   inline Reference( const Dynamic &inRHS) { ptr = inRHS==null()?0: (T*)inRHS->__GetHandle(); }
+   inline Reference( const null &inRHS ) : Pointer<T>(0) { }
+   inline Reference( const T *inValue ) : Pointer<T>( (T*) inValue) { }
+   //inline Reference( T *inValue ) : Pointer(inValue) { }
+   inline Reference( AutoCast inValue ) : Pointer<T>( (T*)inValue.value) { }
+   inline Reference operator=( const Reference &inRHS ) { return ptr = inRHS.ptr; }
+
+
+   inline T *operator->() { return ptr; }
+
+};
+
+
+template<typename T>
+class Struct
+{
+public:
+   T value;
+   // This allows 'StaticCast' to be used from arrays
+   typedef Dynamic Ptr;
+
+   inline Struct( ) {  }
+   inline Struct( const T &inRHS ) : value(inRHS) {  }
+   inline Struct<T> &operator=( const T &inRHS ) { value = inRHS; return *this; }
+
+
+   // Haxe uses -> notation
+   inline T *operator->() { return &value; }
+
+   inline Struct( const null &)
+   {
+      value = T();
+   }
+
+   T &get() { return value; }
+
+   inline Struct( const Dynamic &inRHS)
+   {
+      hx::Object *ptr = inRHS.mPtr;
+      if (!ptr)
+      {
+         value = T();
+         return;
+      }
+      T *data = (T*)ptr->__GetHandle();
+      int len = ptr->__length();
+      if (!data || len<sizeof(T))
+      {
+         hx::NullReference("DynamicData", true);
+         return;
+      }
+      value = *data;
+   }
+
+   inline Struct &operator=(const null &) { value = T(); return *this; }
+
+   inline operator T& () { return value; }
+
+   operator Dynamic() { return CreateDynamicStruct(&value,sizeof(T)); }
+};
+
 
 
 template<typename T>
@@ -171,6 +252,13 @@ public:
          return AutoCast(0);
       return AutoCast(inValue->__GetHandle());
    }
+};
+
+
+class Reference_obj
+{
+public:
+
 };
 
 

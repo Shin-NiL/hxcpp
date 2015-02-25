@@ -70,7 +70,7 @@ struct ArrayBuiltinBase : public CppiaExpr
    const char *getName() { return "ArrayBuiltinBase"; }
 
 
-   CppiaExpr *link(CppiaData &inData)
+   CppiaExpr *link(CppiaModule &inData)
    {
       thisExpr = thisExpr->link(inData);
       for(int a=0;a<args.size();a++)
@@ -393,7 +393,7 @@ struct ArrayBuiltin : public ArrayBuiltinBase
          return thisVal->toString();
       }
 
-      if (FUNC==afPush)
+      if (FUNC==afPush || FUNC==afRemove || FUNC==afIndexOf || FUNC==afLastIndexOf)
          return Dynamic(runInt(ctx))->toString();
 
       return runObject(ctx)->toString();
@@ -502,11 +502,8 @@ struct ArrayBuiltin : public ArrayBuiltinBase
          return thisVal->iterator().mPtr;
       }
 
-      if (FUNC==afPush)
+      if (FUNC==afPush || FUNC==afRemove || FUNC==afIndexOf || FUNC==afLastIndexOf)
          return Dynamic(runInt(ctx)).mPtr;
-
-      if (FUNC==afRemove)
-         return Dynamic((bool)runInt(ctx)).mPtr;
 
       if (FUNC==afJoin)
          return Dynamic(runString(ctx)).mPtr;
@@ -548,11 +545,13 @@ struct ArrayBuiltin : public ArrayBuiltinBase
       }
 
 
-      if (FUNC==afPush || FUNC==afRemove)
+      if (FUNC==afPush || FUNC==afRemove || FUNC==afIndexOf || FUNC==afLastIndexOf)
          runInt(ctx);
+
       if (FUNC==afConcat || FUNC==afCopy || FUNC==afReverse || FUNC==afSplice || FUNC==afSlice ||
            FUNC==afMap || FUNC==afFilter)
          runObject(ctx);
+
       if (FUNC==afReverse)
       {
          Array_obj<ELEM> *thisVal = (Array_obj<ELEM>*)thisExpr->runObject(ctx);
@@ -1158,335 +1157,30 @@ CppiaExpr *createArrayBuiltin(CppiaExpr *src, ArrayType inType, CppiaExpr *inThi
 
 
 
-// --- String -------------------------
-
-struct StringExpr : public CppiaExpr
-{
-   CppiaExpr *strVal;
-   StringExpr(CppiaExpr *inSrc, CppiaExpr *inThis )
-      : CppiaExpr(inSrc)
-   {
-      strVal = inThis;
-   }
-   ExprType getType() { return etString; }
-   CppiaExpr *link(CppiaData &inData)
-   {
-      strVal = strVal->link(inData);
-      return this;
-   }
-   hx::Object *runObject(CppiaCtx *ctx)
-   {
-      return Dynamic(runString(ctx)).mPtr;
-   }
-};
-
-template<bool SUBSTR>
-struct SubStrExpr : public StringExpr
-{
-   CppiaExpr *a0;
-   CppiaExpr *a1;
-   SubStrExpr(CppiaExpr *inSrc, CppiaExpr *inThis, CppiaExpr *inA0, CppiaExpr *inA1)
-      : StringExpr(inSrc,inThis)
-   {
-      a0 = inA0;
-      a1 = inA1;
-   }
-   CppiaExpr *link(CppiaData &inData)
-   {
-      a0 = a0->link(inData);
-      a1 = a1->link(inData);
-      return StringExpr::link(inData);
-   }
-   String runString(CppiaCtx *ctx)
-   {
-      String val = strVal->runString(ctx);
-      BCR_CHECK;
-      int start = a0->runInt(ctx);
-      BCR_CHECK;
-      Dynamic end = a1->runObject(ctx);
-      BCR_CHECK;
-      if (SUBSTR)
-         return val.substr(start,end);
-      else
-         return val.substring(start,end);
-   }
-};
-
-
-template<bool UPPER>
-struct ToCaseExpr : public StringExpr
-{
-   ToCaseExpr(CppiaExpr *inSrc, CppiaExpr *inThis ) : StringExpr(inSrc,inThis) { }
-   String runString(CppiaCtx *ctx)
-   {
-      String val = strVal->runString(ctx);
-      BCR_CHECK;
-      if (UPPER)
-         return val.toUpperCase();
-      else
-         return val.toLowerCase();
-   }
-};
-
-template<bool CODE>
-struct CharAtExpr : public StringExpr
-{
-   CppiaExpr *a0;
-
-   CharAtExpr(CppiaExpr *inSrc, CppiaExpr *inThis, CppiaExpr *inIndex ) : StringExpr(inSrc,inThis)
-   {
-      a0 = inIndex;
-   }
-   CppiaExpr *link(CppiaData &inData)
-   {
-      a0 = a0->link(inData);
-      return StringExpr::link(inData);
-   }
-   ExprType getType() { return CODE ? etObject : etString; }
-
-   String runString(CppiaCtx *ctx)
-   {
-      String val = strVal->runString(ctx);
-      BCR_CHECK;
-      int idx = a0->runInt(ctx);
-      BCR_CHECK;
-      return val.charAt(idx);
-   }
-   int runInt(CppiaCtx *ctx)
-   {
-      //printf("Char code at %d INT\n", CODE);
-      String val = strVal->runString(ctx);
-      BCR_CHECK;
-      int idx = a0->runInt(ctx);
-      BCR_CHECK;
-      return val.charCodeAt(idx);
-   }
-   hx::Object *runObject(CppiaCtx *ctx)
-   {
-      String val = strVal->runString(ctx);
-      BCR_CHECK;
-      int idx = a0->runInt(ctx);
-      BCR_CHECK;
-
-      if (CODE)
-         return val.charCodeAt(idx).mPtr;
-      else
-         return Dynamic(val.charAt(idx)).mPtr;
-   }
-};
-
-
-
-struct SplitExpr : public CppiaExpr
-{
-   CppiaExpr *strVal;
-   CppiaExpr *a0;
-
-   SplitExpr(CppiaExpr *inSrc, CppiaExpr *inThis, CppiaExpr *inDelim ) :
-      CppiaExpr(inSrc)
-   {
-      strVal = inThis;
-      a0 = inDelim;
-   }
-   CppiaExpr *link(CppiaData &inData)
-   {
-      strVal = strVal->link(inData);
-      a0 = a0->link(inData);
-      return this;
-   }
-   ExprType getType() { return etObject; }
-
-   hx::Object *runObject(CppiaCtx *ctx)
-   {
-      String val = strVal->runString(ctx);
-      BCR_CHECK;
-      String separator = a0->runString(ctx);
-      BCR_CHECK;
-      return val.split(separator).mPtr;
-   }
-};
-
-
-
-template<bool LAST>
-struct IndexOfExpr : public CppiaExpr
-{
-   CppiaExpr *strVal;
-   CppiaExpr *sought;
-   CppiaExpr *start;
-
-   IndexOfExpr(CppiaExpr *inSrc, CppiaExpr *inThis, CppiaExpr *inSought, CppiaExpr *inStart ) :
-      CppiaExpr(inSrc)
-   {
-      strVal = inThis;
-      sought = inSought;
-      start = inStart;
-   }
-   ExprType getType() { return etInt; }
-   CppiaExpr *link(CppiaData &inData)
-   {
-      strVal = strVal->link(inData);
-      sought = sought->link(inData);
-      start = start->link(inData);
-      return this;
-   }
-   int runInt(CppiaCtx *ctx)
-   {
-      String val = strVal->runString(ctx);
-      BCR_CHECK;
-      String s = sought->runString(ctx);
-      BCR_CHECK;
-      hx::Object *first = start->runObject(ctx);
-      BCR_CHECK;
-      if (LAST)
-         return val.lastIndexOf(s,first);
-      else
-         return val.indexOf(s,first);
-   }
-   hx::Object *runObject(CppiaCtx *ctx) { return Dynamic(runInt(ctx)).mPtr; }
-};
-
-
-
-// TODO
-// static function fromCharCode( code : Int ) : String;
-
-
-CppiaExpr *createStringBuiltin(CppiaExpr *inSrc, CppiaExpr *inThisExpr, String field, Expressions &ioExpressions )
-{
-   if (field==HX_CSTRING("toString"))
-   {
-      if (ioExpressions.size()!=0) throw "Bad arg count";
-      return inThisExpr;
-   }
-   else if (field==HX_CSTRING("toUpperCase"))
-   {
-      if (ioExpressions.size()!=0) throw "Bad arg count";
-      return new ToCaseExpr<true>(inSrc,inThisExpr);
-   }
-   else if (field==HX_CSTRING("toLowerCase"))
-   {
-      if (ioExpressions.size()!=0) throw "Bad arg count";
-      return new ToCaseExpr<false>(inSrc,inThisExpr);
-   }
-   else if (field==HX_CSTRING("charAt"))
-   {
-      if (ioExpressions.size()!=1) throw "Bad arg count";
-      return new CharAtExpr<false>(inSrc,inThisExpr,ioExpressions[0]);
-   }
-   else if (field==HX_CSTRING("cca"))
-   {
-      if (ioExpressions.size()!=1) throw "Bad arg count";
-      return new CharAtExpr<true>(inSrc,inThisExpr,ioExpressions[0]);
-   }
-   else if (field==HX_CSTRING("charCodeAt"))
-   {
-      if (ioExpressions.size()!=1) throw "Bad arg count";
-      return new CharAtExpr<true>(inSrc,inThisExpr,ioExpressions[0]);
-   }
-   else if (field==HX_CSTRING("split"))
-   {
-      if (ioExpressions.size()!=1) throw "Bad arg count";
-      return new SplitExpr(inSrc,inThisExpr,ioExpressions[0]);
-   }
-   else if (field==HX_CSTRING("indexOf"))
-   {
-      if (ioExpressions.size()!=2) throw "Bad arg count";
-      return new IndexOfExpr<false>(inSrc,inThisExpr,ioExpressions[0], ioExpressions[1]);
-   }
-   else if (field==HX_CSTRING("lastIndexOf"))
-   {
-      if (ioExpressions.size()!=2) throw "Bad arg count";
-      return new IndexOfExpr<true>(inSrc,inThisExpr,ioExpressions[0], ioExpressions[1]);
-   }
-
-   else if (field==HX_CSTRING("substr"))
-   {
-      if (ioExpressions.size()!=2) throw "Bad arg count";
-      return new SubStrExpr<true>(inSrc,inThisExpr, ioExpressions[0], ioExpressions[1]);
-   }
-   else if (field==HX_CSTRING("substring"))
-   {
-      if (ioExpressions.size()!=2) throw "Bad arg count";
-      return new SubStrExpr<false>(inSrc,inThisExpr, ioExpressions[0], ioExpressions[1]);
-   }
-
-   return 0;
-}
-
-
-template<typename ARG0, int (*FUNC)(ARG0 arg0)>
-class IntBuiltin1 : public CppiaExpr
-{
-public:
-   Expressions args;
-
-   IntBuiltin1(CppiaExpr *inSrc, Expressions &inArgs) : CppiaExpr(inSrc), args(inArgs) { }
-
-   const char *getName() { return "IntBuiltin1"; }
-   ExprType getType() { return etInt; }
-
-   void runVoid(CppiaCtx *ctx) { runInt(ctx); }
-   Float runFloat(CppiaCtx *ctx) { return runInt(ctx); }
-   hx::Object *runObject(CppiaCtx *ctx) { return Dynamic(runInt(ctx)).mPtr; }
-   String runString(CppiaCtx *ctx) { return String(runInt(ctx)); }
-
-   int runInt(CppiaCtx *ctx)
-   {
-      ARG0 val0;
-      runValue(val0, ctx, args[0]);
-      BCR_CHECK;
-      return FUNC(val0);
-   }
-};
-
-
-template<typename ARG0, typename ARG1, void (*FUNC)(ARG0,ARG1)>
-class VoidBuiltin2 : public CppiaExpr
-{
-public:
-   Expressions args;
-
-   VoidBuiltin2(CppiaExpr *inSrc, Expressions &inArgs) : CppiaExpr(inSrc), args(inArgs) { }
-
-   const char *getName() { return "VoidBuiltin2"; }
-   ExprType getType() { return etInt; }
-
-   int runInt(CppiaCtx *ctx) { runVoid(ctx); return 0; }
-   Float runFloat(CppiaCtx *ctx) { runVoid(ctx); return 0;}
-   hx::Object *runObject(CppiaCtx *ctx) { runVoid(ctx); return 0; }
-   String runString(CppiaCtx *ctx) { runVoid(ctx); return String(); }
-   void runVoid(CppiaCtx *ctx)
-   {
-      ARG0 val0;
-      runValue(val0, ctx, args[0]);
-      BCR_VCHECK;
-      ARG1 val1;
-      runValue(val1, ctx, args[1]);
-      BCR_VCHECK;
-      FUNC(val0,val1);
-   }
-};
 
 
 
 
 
-CppiaExpr *createGlobalBuiltin(CppiaExpr *src, String function, Expressions &ioExpressions )
-{
-   if (function==HX_CSTRING("__hxcpp_memory_get_byte") )
-   {
-      return new IntBuiltin1<int, __hxcpp_memory_get_byte>(src,ioExpressions);
-   }
-   if (function==HX_CSTRING("__hxcpp_memory_set_byte") )
-   {
-      return new VoidBuiltin2<int,int,__hxcpp_memory_set_byte>(src,ioExpressions);
-   }
- 
-   printf("Unknown function : %s\n", function.__s );
-   throw "Unknown global";
-   return 0;
-}
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 
 

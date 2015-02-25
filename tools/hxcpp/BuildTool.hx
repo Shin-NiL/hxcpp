@@ -30,6 +30,7 @@ class BuildTool
    var mStripper:Stripper;
    var mPrelinkers:Prelinkers;
    var mLinkers:Linkers;
+   var mCopyFiles:Array<CopyFile>;
    var mFileGroups:FileGroups;
    var mTargets:Targets;
    var mFileStack:Array<String>;
@@ -69,6 +70,7 @@ class BuildTool
       mLinkers = new Linkers();
       mCurrentIncludeFile = "";
       mFileStack = [];
+      mCopyFiles = [];
       mIncludePath = inIncludePath;
       instance = this;
 
@@ -109,6 +111,8 @@ class BuildTool
 
       setupAppleDirectories(mDefines);
 
+      if (isMsvc())
+         mDefines.set("isMsvc","1");
 
       include("toolchain/finish-setup.xml");
 
@@ -129,17 +133,18 @@ class BuildTool
 
       parseXML(xml,"");
       popFile();
-
+      
       include("toolchain/" + mDefines.get("toolchain") + "-toolchain.xml");
-
+      
+      if (mDefines.exists("HXCPP_CONFIG"))
+         include(mDefines.get("HXCPP_CONFIG"),"exes",true);
+      
+      if (Log.verbose) Log.println ("");
+      
       // MSVC needs this before the toolchain file, Emscripten wants to set HXCPP_COMPILE_THREADS
       // If not already calculated in "setup"
       getThreadCount();
-
-
-      if (mDefines.exists("HXCPP_CONFIG"))
-         include(mDefines.get("HXCPP_CONFIG"),"exes",true);
-
+      
       if (mDefines.exists("HXCPP_COMPILE_CACHE"))
       {
          compileCache = mDefines.get("HXCPP_COMPILE_CACHE");
@@ -173,8 +178,10 @@ class BuildTool
 
       if (useCache)
       {
-         Log.info("", "Using compiler cache \"" + compileCache + "\"");
+         Log.info("", "\x1b[33;1mUsing compiler cache: " + compileCache + "\x1b[0m");
       }
+      
+      if (Log.verbose) Log.println ("");
 
       if (inTargets.remove("clear"))
          for(target in mTargets.keys())
@@ -186,11 +193,14 @@ class BuildTool
 
       for(target in inTargets)
          buildTarget(target);
+      
+      if (threadExitCode != 0)
+         Sys.exit(threadExitCode);
    }
 
    public function pushFile(inFilename:String, inWhy:String, inSection:String="")
    {
-      Log.v('Parsing $inWhy: $inFilename' + (inSection==""?"":' (section $inSection)'));
+      Log.info("", " - \x1b[1mParsing " + inWhy + ":\x1b[0m " + inFilename + (inSection == "" ? "" : " (section \"" + inSection + "\")"));
       mFileStack.push(inFilename);
    }
 
@@ -208,7 +218,7 @@ class BuildTool
       {
          var thread_var = defs.exists("HXCPP_COMPILE_THREADS") ?
             defs.get("HXCPP_COMPILE_THREADS") : Sys.getEnv("HXCPP_COMPILE_THREADS");
-
+         
          if (thread_var == null)
          {
             sCompileThreadCount = getNumberOfProcesses();
@@ -220,7 +230,7 @@ class BuildTool
          if (sCompileThreadCount!=sReportedThreads)
          {
             sReportedThreads = sCompileThreadCount;
-            Log.v("Using " + sCompileThreadCount + " compile threads");
+            Log.v("\x1b[33;1mUsing compile threads: " + sCompileThreadCount + "\x1b[0m");
          }
       }
       return sCompileThreadCount;
@@ -382,7 +392,12 @@ class BuildTool
             if (exe!="" && mStripper!=null)
                if (target.mToolID=="exe" || target.mToolID=="dll")
                   mStripper.strip(exe);
+
       }
+
+      for(copyFile in mCopyFiles)
+         if (copyFile.toolId==null || copyFile.toolId==target.mToolID)
+            copyFile.copy(target.mOutputDir);
 
       if (restoreDir!="")
          Sys.setCwd(restoreDir);
@@ -500,7 +515,18 @@ class BuildTool
                         file.mDepends.push( substitute(f.att.name) );
                   group.mFiles.push( file );
                case "section" : createFileGroup(el,group,inName);
-               case "depend" : group.addDepend( substitute(el.att.name) );
+               case "depend" :
+                  if (el.has.name)
+                     group.addDepend( substitute(el.att.name) );
+                  else if (el.has.files)
+                  {
+                     var name = substitute(el.att.files);
+                     if (!mFileGroups.exists(name))
+                         Log.error( "Could not find filegroup for depend node:" + name ); 
+                     group.addDependFiles(mFileGroups.get(name));
+                  }
+                  else
+                     Log.error("depend node must have 'name' or 'files' attribute");
                case "hlsl" :
                   group.addHLSL( substitute(el.att.name), substitute(el.att.profile),
                   substitute(el.att.variable), substitute(el.att.target)  );
@@ -622,7 +648,7 @@ class BuildTool
                   target.mFlags.push( substitute(el.att.value) );
                case "dir" : target.mDirs.push( substitute(el.att.name) );
                case "outdir" : target.mOutputDir = substitute(el.att.name)+"/";
-               case "ext" : target.mExt = (substitute(el.att.value));
+               case "ext" : target.setExt( (substitute(el.att.value)) );
                case "builddir" : target.mBuildDir = substitute(el.att.name);
                case "files" :
                   var id = el.att.id;
@@ -714,6 +740,9 @@ class BuildTool
    // Setting HXCPP_COMPILE_THREADS to 2x number or cores can help with hyperthreading
    public static function getNumberOfProcesses():Int
    {
+      var cache = Log.verbose;
+      Log.verbose = false;
+      
       var result = null;
       if (isWindows)
       {
@@ -746,6 +775,8 @@ class BuildTool
          }
       }
       
+      Log.verbose = cache;
+      
       if (result == null || Std.parseInt(result) < 1)
       {   
          return 1;
@@ -773,6 +804,12 @@ class BuildTool
    {
       return instance.mDefines.get("toolchain")=="msvc";
    }
+
+   public static function isMingw()
+   {
+      return instance.mDefines.get("toolchain")=="mingw";
+   }
+
 
    // Process args and environment.
    static public function main()
@@ -924,7 +961,7 @@ class BuildTool
             Log.v("\x1b[33;1mUsing target toolchain: " + defines.get("toolchain") + "\x1b[0m");
          else
             Log.v("\x1b[33;1mNo specified toolchain\x1b[0m");
-         Log.v("\n");
+         if (Log.verbose) Log.println("");
  
 
          if (targets.length==0)
@@ -1017,16 +1054,12 @@ class BuildTool
          defines.set("toolchain","gph");
          defines.set("gph","gph");
          defines.set("BINDIR","GPH");
-      } else if (defines.exists ("gcw0")) {
-	 defines.set ("toolchain", "gcw0");
-	 defines.set ("gcw0", "gcw0");
-	 defines.set ("BINDIR", "GCW0");
-      } else if (defines.exists("mingw") || defines.exists("HXCPP_MINGW") )
+      }
+      else if (defines.exists ("gcw0"))
       {
-         set64(defines,m64);
-         defines.set("toolchain","mingw");
-         defines.set("mingw","mingw");
-         defines.set("BINDIR",m64 ? "Windows64":"Windows");
+         defines.set ("toolchain", "gcw0");
+         defines.set ("gcw0", "gcw0");
+         defines.set ("BINDIR", "GCW0");
       }
       else if (defines.exists("cygwin") || defines.exists("HXCPP_CYGWIN"))
       {
@@ -1052,16 +1085,40 @@ class BuildTool
          else
          {
             set64(defines,m64);
-            defines.set("toolchain","msvc");
             defines.set("windows","windows");
-            //msvc = true;
-            if ( defines.exists("winrt") )
+            defines.set("BINDIR",m64 ? "Windows64":"Windows");
+
+            // Choose between MSVC and MINGW
+            var useMsvc = false;
+
+            if (defines.exists("mingw") || defines.exists("HXCPP_MINGW") || defines.exists("minimingw"))
+               useMsvc = false;
+            else if ( defines.exists("winrt") || defines.exists("HXCPP_MSVC_VER"))
+               useMsvc = true;
+            else
             {
-               defines.set("BINDIR",m64 ? "WinRTx64":"WinRTx86");
+                for(i in 8...24)
+                {
+                   if (Sys.getEnv("VS" + i + "0COMNTOOLS")!=null)
+                   {
+                      useMsvc = true;
+                      break;
+                   }
+                }
+
+                Log.v("Using default windows compiler : " + (useMsvc ? "MSVC" : "MinGW") );
+            }
+
+            if (useMsvc)
+            {
+               defines.set("toolchain","msvc");
+               if ( defines.exists("winrt") )
+                  defines.set("BINDIR",m64 ? "WinRTx64":"WinRTx86");
             }
             else
             {
-               defines.set("BINDIR",m64 ? "Windows64":"Windows");
+               defines.set("toolchain","mingw");
+               defines.set("mingw","mingw");
             }
          }
       }
@@ -1199,7 +1256,7 @@ class BuildTool
                   Log.error(error);
                case "path" : 
                   var path = substitute(el.att.name);
-                  Log.info("", "Adding path " + path);
+                  Log.info("", " - \x1b[1mAdding path:\x1b[0m " + path);
                   var sep = mDefines.exists("windows_host") ? ";" : ":";
                   var add = path + sep + Sys.getEnv("PATH");
                   Sys.putEnv("PATH", add);
@@ -1241,11 +1298,27 @@ class BuildTool
                      createTarget(el,mTargets.get(name));
                   else
                      mTargets.set( name, createTarget(el,null) );
+               case "copyFile" : 
+                  mCopyFiles.push(
+                      new CopyFile(substitute(el.att.name),
+                                   substitute(el.att.from),
+                                   el.has.allowMissing ?  subBool(el.att.allowMissing) : false,
+                                   el.has.toolId ?  substitute(el.att.toolId) : null ) );
                case "section" : 
                   parseXML(el,"");
+
+               case "pleaseUpdateHxcppTool" : 
+                  checkToolVersion( substitute(el.att.version) );
             }
          }
       }
+   }
+
+   public function checkToolVersion(inVersion:String)
+   {
+      var ver = Std.parseInt(inVersion);
+      if (ver<1)
+         Log.error("Your version of hxcpp.n is out-of-date.  Please update.");
    }
 
 
@@ -1300,6 +1373,13 @@ class BuildTool
             sub = PathManager.getHaxelib(sub.substr(8));
             sub = PathManager.standardize(sub);
          }
+         else if (sub.substr(0,13)=="removeQuotes:")
+         {
+            sub = mDefines.get(sub.substr(13));
+            var len = sub.length;
+            if (len>1 && sub.substr(0,1)=="\"" && sub.substr(len-1)=="\"")
+               sub = sub.substr(1,len-2);
+         }
          else
             sub = mDefines.get(sub);
 
@@ -1308,6 +1388,12 @@ class BuildTool
       }
 
       return str;
+   }
+
+   public function subBool(str:String):Bool
+   {
+      var result = substitute(str);
+      return result=="t" || result=="true" || result=="1";
    }
 
    public function valid(inEl:Fast,inSection:String):Bool

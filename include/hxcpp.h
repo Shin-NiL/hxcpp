@@ -10,21 +10,6 @@
 #ifdef _MSC_VER
    #include <typeinfo.h>
    namespace hx { typedef ::type_info type_info; }
-   #undef TRUE
-   #undef FALSE
-   #undef BOOLEAN
-   #undef ERROR
-   #undef NO_ERROR
-   #undef DELETE
-   #undef OPTIONS
-   #undef IN
-   #undef OUT
-   #undef ALTERNATE
-   #undef OPTIONAL
-   #undef DOUBLE_CLICK
-   #undef DIFFERENCE
-   #undef POINT
-   #undef RECT
 #else
    #include <typeinfo>
    #include <stdint.h>
@@ -86,6 +71,7 @@
 
 typedef char HX_CHAR;
 
+
 #define HX_STRINGI(s,len) ::String( (const HX_CHAR *)(("\xff\xff\xff\xff" s)) + 4 ,len)
 
 #define HX_STRI(s) HX_STRINGI(s,sizeof(s)/sizeof(HX_CHAR)-1)
@@ -132,6 +118,13 @@ typedef char HX_CHAR;
 #endif
 
 
+#ifdef HXCPP_BIG_ENDIAN
+#define HX_HCSTRING(s,h0,h1,h2,h3) ::String( (const HX_CHAR *)((h3 h2 h1 h0 "\x80\x00\x00\x00" s )) + 8 , sizeof(s)/sizeof(HX_CHAR)-1)
+#else
+#define HX_HCSTRING(s,h0,h1,h2,h3) ::String( (const HX_CHAR *)((h0 h1 h2 h3 "\x00\x00\x00\x80" s )) + 8 , sizeof(s)/sizeof(HX_CHAR)-1)
+#endif
+
+
 #pragma warning(disable:4251)
 #pragma warning(disable:4800)
 
@@ -152,6 +145,7 @@ typedef float Float;
 #else
 typedef double Float;
 #endif
+
 
 // Extended mapping - cpp namespace
 namespace cpp
@@ -181,14 +175,21 @@ namespace haxe { namespace io { typedef unsigned char Unsigned_char__; } }
 
 namespace cpp { class CppInt32__; }
 namespace hx { class Object; }
-namespace hx { class FieldMap; }
 namespace hx { class FieldRef; }
 namespace hx { class IndexRef; }
 namespace hx { template<typename O> class ObjectPtr; }
 template<typename ELEM_> class Array_obj;
 template<typename ELEM_> class Array;
-class Class_obj;
-typedef hx::ObjectPtr<Class_obj> Class;
+namespace hx {
+   class Class_obj;
+   typedef hx::ObjectPtr<hx::Class_obj> Class;
+}
+
+#if (HXCPP_API_LEVEL < 320) && !defined(__OBJC__)
+typedef hx::Class Class;
+typedef hx::Class_obj Class_obj;
+#endif
+
 class Dynamic;
 class String;
 
@@ -210,7 +211,28 @@ public:
    virtual void visitAlloc(void **ioPtr)=0;
 };
 
+
+
+#if (HXCPP_API_LEVEL >= 313)
+enum PropertyAccessMode
+{
+   paccNever   = 0,
+   paccDynamic = 1,
+   paccAlways  = 2,
+};
+typedef PropertyAccessMode PropertyAccess;
+#define HX_PROP_NEVER  hx::paccNever
+#define HX_PROP_DYNAMIC hx::paccDynamic
+#define HX_PROP_ALWAYS hx::paccAlways
+#else
+typedef bool PropertyAccess;
+#define HX_PROP_NEVER  false
+#define HX_PROP_DYNAMIC true
+#define HX_PROP_ALWAYS true
+#endif
+
 } // end namespace hx
+
 
 
 
@@ -229,16 +251,16 @@ public:
 #include <hx/FieldRef.h>
 #include <hx/Anon.h>
 #include "Array.h"
-#include "Class.h"
+#include <hx/Class.h>
 #include "Enum.h"
 #include <hx/Interface.h>
 #include <hx/StdLibs.h>
+#include <cpp/Pointer.h>
 #include <hx/Operators.h>
 #include <hx/Functions.h>
 #include <hx/Debug.h>
 #include <hx/Boot.h>
 #include <hx/Undefine.h>
-#include <cpp/Pointer.h>
 
 #endif
 

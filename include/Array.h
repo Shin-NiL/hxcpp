@@ -77,11 +77,11 @@ public:
 
    typedef hx::Object super;
 
-   Dynamic __SetField(const String &inString,const Dynamic &inValue ,bool inCallProp) { return null(); }
+   Dynamic __SetField(const String &inString,const Dynamic &inValue ,hx::PropertyAccess inCallProp) { return null(); }
 
-   static Class __mClass;
-   static Class &__SGetClass() { return __mClass; }
-   Class __GetClass() const { return __mClass; }
+   static hx::Class __mClass;
+   static hx::Class &__SGetClass() { return __mClass; }
+   hx::Class __GetClass() const { return __mClass; }
    String toString();
    String __ToString() const;
 
@@ -102,8 +102,15 @@ public:
 
    void safeSort(Dynamic sorter, bool isString);
 
+   inline void __unsafeStringReference(String inString)
+   {
+      mBase = (char *)inString.__s;
+      length = inString.length / GetElementSize();
+      mAlloc = length;
+   }
+
    // Dynamic interface
-   Dynamic __Field(const String &inString ,bool inCallProp);
+   Dynamic __Field(const String &inString ,hx::PropertyAccess inCallProp);
    virtual Dynamic __concat(const Dynamic &a0) = 0;
    virtual Dynamic __copy() = 0;
    virtual Dynamic __insert(const Dynamic &a0,const Dynamic &a1) = 0;

@@ -31,6 +31,12 @@ extern "C" EXPORT_EXTRA void AppLogInternal(const char* pFunction, int lineNumbe
 #include <map>
 #include <time.h>
 
+
+#ifdef HX_ANDROID
+#define rand() lrand48()
+#define srand(x) srand48(x)
+#endif
+
 void __hx_stack_set_last_exception();
 
 namespace hx
@@ -142,15 +148,27 @@ int __hxcpp_irand(int inMax)
 void __hxcpp_stdlibs_boot()
 {
    #if defined(HX_WINDOWS) && !defined(HX_WINRT)
-   AttachConsole(ATTACH_PARENT_PROCESS);
-   if (GetConsoleWindow() != NULL)
+   HMODULE kernel32 = LoadLibraryA("kernel32");
+   if (kernel32)
    {
-      if (_fileno(stdout) < 0 || _get_osfhandle(fileno(stdout)) < 0)
-         freopen("CONOUT$", "w", stdout);
-      if (_fileno(stderr) < 0 || _get_osfhandle(fileno(stderr)) < 0)
-         freopen("CONOUT$", "w", stderr);
-      if (_fileno(stdin) < 0 || _get_osfhandle(fileno(stdin)) < 0)
-         freopen("CONIN$", "r", stdin);
+      typedef BOOL (WINAPI *AttachConsoleFunc)(DWORD);
+      typedef HWND (WINAPI *GetConsoleWindowFunc)(void);
+      AttachConsoleFunc attach = (AttachConsoleFunc)GetProcAddress(kernel32,"AttachConsole");
+      GetConsoleWindowFunc getConsole = (GetConsoleWindowFunc)GetProcAddress(kernel32,"GetConsoleWindow");
+      if (attach && getConsole)
+      {
+         attach( /*ATTACH_PARENT_PROCESS*/ (DWORD)-1 );
+
+         if (getConsole())
+         {
+            if (_fileno(stdout) < 0 || _get_osfhandle(fileno(stdout)) < 0)
+               freopen("CONOUT$", "w", stdout);
+            if (_fileno(stderr) < 0 || _get_osfhandle(fileno(stderr)) < 0)
+               freopen("CONOUT$", "w", stderr);
+            if (_fileno(stdin) < 0 || _get_osfhandle(fileno(stdin)) < 0)
+               freopen("CONIN$", "r", stdin);
+         }
+      }
    }
    #endif
    
@@ -162,25 +180,25 @@ void __hxcpp_stdlibs_boot()
 void __trace(Dynamic inObj, Dynamic inData)
 {
 #ifdef TIZEN
-   AppLogInternal(inData==null() ? "?" : inData->__Field( HX_CSTRING("fileName") , true) ->toString().__s,
-      inData==null() ? 0 : inData->__Field( HX_CSTRING("lineNumber") , true)->__ToInt(),
+   AppLogInternal(inData==null() ? "?" : inData->__Field( HX_CSTRING("fileName") , HX_PROP_DYNAMIC) ->toString().__s,
+      inData==null() ? 0 : inData->__Field( HX_CSTRING("lineNumber") , HX_PROP_DYNAMIC)->__ToInt(),
       "%s\n", inObj.GetPtr() ? inObj->toString().__s : "null" );
 #else
 #ifdef HX_UTF8_STRINGS
-   #ifdef ANDROID
+   #if defined(HX_ANDROID) && !defined(HXCPP_EXE_LINK)
    __android_log_print(ANDROID_LOG_INFO, "trace","%s:%d: %s",
    #elif defined(WEBOS)
    syslog(LOG_INFO, "%s:%d: %s",
    #else
    printf("%s:%d: %s\n",
    #endif
-               inData==null() ? "?" : inData->__Field( HX_CSTRING("fileName") , true) ->toString().__s,
-               inData==null() ? 0 : inData->__Field( HX_CSTRING("lineNumber") , true)->__ToInt(),
+               inData==null() ? "?" : inData->__Field( HX_CSTRING("fileName") , HX_PROP_DYNAMIC) ->toString().__s,
+               inData==null() ? 0 : inData->__Field( HX_CSTRING("lineNumber") , HX_PROP_DYNAMIC)->__ToInt(),
                inObj.GetPtr() ? inObj->toString().__s : "null" );
 #else
    printf( "%S:%d: %S\n",
-               inData->__Field( HX_CSTRING("fileName") , true)->__ToString().__s,
-               inData->__Field( HX_CSTRING("lineNumber") , true)->__ToInt(),
+               inData->__Field( HX_CSTRING("fileName") , HX_PROP_DYNAMIC)->__ToString().__s,
+               inData->__Field( HX_CSTRING("lineNumber") , HX_PROP_DYNAMIC)->__ToInt(),
                inObj.GetPtr() ? inObj->toString().__s : L"null" );
 #endif
 #endif
@@ -333,7 +351,7 @@ bool __instanceof(const Dynamic &inValue, const Dynamic &inType)
       return true;
    if (inValue==null())
       return false;
-   Class c = inType;
+   hx::Class c = inType;
    if (c==null())
       return false;
    return c->CanCast(inValue.GetPtr());
@@ -487,7 +505,7 @@ int  __hxcpp_field_to_id( const char *inFieldName )
    String str(inFieldName,strlen(inFieldName));
 
    // Make into "const" string that will not get collected...
-   str = String((HX_CHAR *)hx::InternalCreateConstBuffer(str.__s,(str.length+1) * sizeof(HX_CHAR)), str.length );
+   str = String((HX_CHAR *)hx::InternalCreateConstBuffer(str.__s,(str.length+1) * sizeof(HX_CHAR),true), str.length );
 
    if (sgFieldToStringAlloc<=sgFieldToStringSize+1)
    {

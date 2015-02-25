@@ -18,12 +18,13 @@ void  __hxcpp_reachable(hx::Object *inKeep);
 void  __hxcpp_enable(bool inEnable);
 void  __hxcpp_collect(bool inMajor=true);
 void   __hxcpp_gc_compact();
-int   __hxcpp_gc_trace(Class inClass, bool inPrint);
+int   __hxcpp_gc_trace(hx::Class inClass, bool inPrint);
 int   __hxcpp_gc_used_bytes();
 int   __hxcpp_gc_mem_info(int inWhat);
 void  __hxcpp_enter_gc_free_zone();
 void  __hxcpp_exit_gc_free_zone();
 void  __hxcpp_gc_safe_point();
+void  __hxcpp_spam_collects(int inEveryNCalls);
 
 // Finalizers from haxe code...
 void  __hxcpp_gc_do_not_kill(Dynamic inObj);
@@ -34,6 +35,7 @@ hx::Object *__hxcpp_weak_ref_create(Dynamic inObject);
 hx::Object *__hxcpp_weak_ref_get(Dynamic inRef);
 
 
+unsigned int __hxcpp_obj_hash(Dynamic inObj);
 int __hxcpp_obj_id(Dynamic inObj);
 hx::Object *__hxcpp_id_obj(int);
 
@@ -42,6 +44,7 @@ namespace hx
 
 extern int gPauseForCollect;
 void PauseForCollect();
+bool IsWeakRefValid(hx::Object *inPtr);
 
 void MarkConservative(int *inBottom, int *inTop,hx::MarkContext *__inCtx);
 
@@ -96,7 +99,7 @@ void GCCheckPointer(void *);
 void *InternalNew(int inSize,bool inIsObject);
 void *InternalRealloc(void *inData,int inSize);
 void InternalEnableGC(bool inEnable);
-void *InternalCreateConstBuffer(const void *inData,int inSize);
+void *InternalCreateConstBuffer(const void *inData,int inSize,bool inAddStringHash=false);
 void RegisterNewThread(void *inTopOfStack);
 void SetTopOfStack(void *inTopOfStack,bool inForce=false);
 int InternalCollect(bool inMajor,bool inCompact);
@@ -155,10 +158,14 @@ inline void EnsureObjPtr(hx::Object *) { }
 
 #define HX_MARK_OBJECT(ioPtr) if (ioPtr) hx::MarkObjectAlloc(ioPtr, __inCtx );
 
-#define HX_GC_CONST_STRING  0xffffffff
+
+#define HX_GC_CONST_ALLOC_BIT  0x80000000
+#define HX_GC_CONST_ALLOC_MARK_BIT  0x80
+#define HX_GC_NO_STRING_HASH   0x40000000
+#define HX_GC_NO_HASH_MASK     (HX_GC_CONST_ALLOC_BIT | HX_GC_NO_STRING_HASH)
 
 #define HX_MARK_STRING(ioPtr) \
-   if (ioPtr && (((int *)ioPtr)[-1] != HX_GC_CONST_STRING) ) hx::MarkAlloc((void *)ioPtr, __inCtx );
+   if (ioPtr && !(((unsigned int *)ioPtr)[-1] & HX_GC_CONST_ALLOC_BIT) ) hx::MarkAlloc((void *)ioPtr, __inCtx );
 
 #define HX_MARK_ARRAY(ioPtr) { if (ioPtr) hx::MarkAlloc((void *)ioPtr, __inCtx ); }
 
@@ -172,7 +179,7 @@ inline void EnsureObjPtr(hx::Object *) { }
   { hx::EnsureObjPtr(ioPtr); if (ioPtr) __inCtx->visitObject( (hx::Object **)&ioPtr); }
 
 #define HX_VISIT_STRING(ioPtr) \
-   if (ioPtr && (((int *)ioPtr)[-1] != HX_GC_CONST_STRING) ) __inCtx->visitAlloc((void **)&ioPtr);
+   if (ioPtr && !(((unsigned int *)ioPtr)[-1] & HX_GC_CONST_ALLOC_BIT) ) __inCtx->visitAlloc((void **)&ioPtr);
 
 #define HX_VISIT_ARRAY(ioPtr) { if (ioPtr) __inCtx->visitAlloc((void **)&ioPtr); }
 

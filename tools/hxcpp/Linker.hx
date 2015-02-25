@@ -51,7 +51,7 @@ class Linker
 
    public function link(inTarget:Target,inObjs:Array<String>,inCompiler:Compiler)
    {
-      var ext = inTarget.mExt=="" ? mExt : inTarget.mExt;
+      var ext = inTarget.getExt(mExt);
       var file_name = mNamePrefix + inTarget.mOutput + ext;
       
       try
@@ -82,7 +82,7 @@ class Linker
                var current = parts[0] + "-" + BuildTool.getMsvcVer() + parts[1];
                if (FileSystem.exists(current))
                {
-                  Log.info("", "Using current compiler library " + current);
+                  Log.info("", " - \x1b[1mUsing current compiler library:\x1b[0m " + current);
                   libs[i]=current;
                }
                else
@@ -90,7 +90,7 @@ class Linker
                   var v18 = parts[0] + "-18" + parts[1];
                   if (FileSystem.exists(v18))
                   {
-                     Log.info("", "Using msvc18 compatible library " + v18);
+                     Log.info("", " - \x1b[1mUsing MSVC18 compatible library:\x1b[0m " + v18);
                      libs[i]=v18;
                      if (!v18Added)
                      {
@@ -100,19 +100,28 @@ class Linker
                   }
                   else
                   {
-                     throw "Could not find compatible library for " + lib + ", " + v18 + " does not exist";
+                     Log.error("Could not find compatible library for " + lib + ", " + v18 + " does not exist");
                   }
                }
             }
             else
                libs[i] = parts[0] + parts[1];
          }
+
          if (!isOutOfDateLibs)
          {
             var lib = libs[i];
             if (FileSystem.exists(lib))
                isOutOfDateLibs = isOutOfDate(out_name,[lib]);
          }
+
+         if (BuildTool.isMingw())
+         {
+            var libMatch = ~/^([a-zA-Z0-9_]+).lib$/;
+            if (libMatch.match(libs[i]))
+               libs[i] = "-l" + libMatch.matched(1);
+         }
+
       }
 
       if (isOutOfDateLibs || isOutOfDate(out_name,inObjs) || isOutOfDate(out_name,inTarget.mDepends))
@@ -170,6 +179,7 @@ class Linker
          // Place list of obj files in a file called "all_objs"
          if (mFromFile=="@")
          {
+            PathManager.mkdir(inCompiler.mObjDir);
             var fname = inCompiler.mObjDir + "/all_objs";
             var fout = sys.io.File.write(fname,false);
             for(obj in objs)

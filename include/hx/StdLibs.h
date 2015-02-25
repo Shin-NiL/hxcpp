@@ -22,7 +22,8 @@ void RegisterResources(hx::Resource *inResources);
 
 struct AnyCast
 {
-   AnyCast(void *inPtr) : mPtr(inPtr) { }
+   template<typename T>
+   explicit AnyCast(T* inPtr) : mPtr((void *)inPtr) { }
 
    template<typename T>
    operator T*() const { return (T*)mPtr; }
@@ -49,7 +50,7 @@ void           __hxcpp_stdlibs_boot();
 
 // --- Maths ---------------------------------------------------------
 double __hxcpp_drand();
-int __hxcpp_irand(int inMax);
+HXCPP_EXTERN_CLASS_ATTRIBUTES int __hxcpp_irand(int inMax);
 
 // --- Casting/Converting ---------------------------------------------------------
 HXCPP_EXTERN_CLASS_ATTRIBUTES bool  __instanceof(const Dynamic &inValue, const Dynamic &inType);
@@ -86,7 +87,7 @@ HXCPP_EXTERN_CLASS_ATTRIBUTES String __hxcpp_get_kind(Dynamic inObject);
 // --- haxe.io.BytesData ----------------------------------------------------------------
 
 HXCPP_EXTERN_CLASS_ATTRIBUTES void __hxcpp_bytes_of_string(Array<unsigned char> &outBytes,const String &inString);
-HXCPP_EXTERN_CLASS_ATTRIBUTES void __hxcpp_string_of_bytes(Array<unsigned char> &inBytes,String &outString,int pos,int len);
+HXCPP_EXTERN_CLASS_ATTRIBUTES void __hxcpp_string_of_bytes(Array<unsigned char> &inBytes,String &outString,int pos,int len,bool inCopyPointer=false);
 // UTF8 processing
 HXCPP_EXTERN_CLASS_ATTRIBUTES String __hxcpp_char_array_to_utf8_string(Array<int> &inChars,int inFirst=0, int inLen=-1);
 HXCPP_EXTERN_CLASS_ATTRIBUTES Array<int> __hxcpp_utf8_string_to_char_array(String &inString);
@@ -101,7 +102,7 @@ HXCPP_EXTERN_CLASS_ATTRIBUTES void          __int_hash_set(Dynamic &ioHash,int i
 HXCPP_EXTERN_CLASS_ATTRIBUTES Dynamic       __int_hash_get(Dynamic &ioHash,int inKey);
 HXCPP_EXTERN_CLASS_ATTRIBUTES bool          __int_hash_exists(Dynamic &ioHash,int inKey);
 HXCPP_EXTERN_CLASS_ATTRIBUTES bool          __int_hash_remove(Dynamic &ioHash,int inKey);
-HXCPP_EXTERN_CLASS_ATTRIBUTES Dynamic       __int_hash_keys(Dynamic &ioHash);
+HXCPP_EXTERN_CLASS_ATTRIBUTES Array<Int>    __int_hash_keys(Dynamic &ioHash);
 HXCPP_EXTERN_CLASS_ATTRIBUTES Dynamic       __int_hash_values(Dynamic &ioHash);
 // Typed IntHash access...
 HXCPP_EXTERN_CLASS_ATTRIBUTES void          __int_hash_set_int(Dynamic &ioHash,int inKey,int inValue);
@@ -110,6 +111,43 @@ HXCPP_EXTERN_CLASS_ATTRIBUTES void          __int_hash_set_float(Dynamic &ioHash
 HXCPP_EXTERN_CLASS_ATTRIBUTES int           __int_hash_get_int(Dynamic &ioHash,int inKey);
 HXCPP_EXTERN_CLASS_ATTRIBUTES ::String      __int_hash_get_string(Dynamic &ioHash,int inKey);
 HXCPP_EXTERN_CLASS_ATTRIBUTES Float         __int_hash_get_float(Dynamic &ioHash,int inKey);
+HXCPP_EXTERN_CLASS_ATTRIBUTES ::String      __int_hash_to_string(Dynamic &ioHash);
+
+
+// --- StringHash ----------------------------------------------------------------------
+
+HXCPP_EXTERN_CLASS_ATTRIBUTES void          __string_hash_set(Dynamic &ioHash,String inKey,const Dynamic &value,bool inForceDynamic=false);
+HXCPP_EXTERN_CLASS_ATTRIBUTES Dynamic       __string_hash_get(Dynamic &ioHash,String inKey);
+HXCPP_EXTERN_CLASS_ATTRIBUTES bool          __string_hash_exists(Dynamic &ioHash,String inKey);
+HXCPP_EXTERN_CLASS_ATTRIBUTES bool          __string_hash_remove(Dynamic &ioHash,String inKey);
+HXCPP_EXTERN_CLASS_ATTRIBUTES Array< ::String> __string_hash_keys(Dynamic &ioHash);
+HXCPP_EXTERN_CLASS_ATTRIBUTES Dynamic       __string_hash_values(Dynamic &ioHash);
+// Typed StringHash access...
+HXCPP_EXTERN_CLASS_ATTRIBUTES void          __string_hash_set_int(Dynamic &ioHash,String inKey,int inValue);
+HXCPP_EXTERN_CLASS_ATTRIBUTES void          __string_hash_set_string(Dynamic &ioHash,String inKey,::String inValue);
+HXCPP_EXTERN_CLASS_ATTRIBUTES void          __string_hash_set_float(Dynamic &ioHash,String inKey,Float inValue);
+HXCPP_EXTERN_CLASS_ATTRIBUTES int           __string_hash_get_int(Dynamic &ioHash,String inKey);
+HXCPP_EXTERN_CLASS_ATTRIBUTES ::String      __string_hash_get_string(Dynamic &ioHash,String inKey);
+HXCPP_EXTERN_CLASS_ATTRIBUTES Float         __string_hash_get_float(Dynamic &ioHash,String inKey);
+HXCPP_EXTERN_CLASS_ATTRIBUTES ::String      __string_hash_to_string(Dynamic &ioHash);
+
+
+// --- ObjectHash ----------------------------------------------------------------------
+
+HXCPP_EXTERN_CLASS_ATTRIBUTES void          __object_hash_set(Dynamic &ioHash,Dynamic inKey,const Dynamic &value,bool inWeakKey=false);
+HXCPP_EXTERN_CLASS_ATTRIBUTES Dynamic       __object_hash_get(Dynamic &ioHash,Dynamic inKey);
+HXCPP_EXTERN_CLASS_ATTRIBUTES bool          __object_hash_exists(Dynamic &ioHash,Dynamic inKey);
+HXCPP_EXTERN_CLASS_ATTRIBUTES bool          __object_hash_remove(Dynamic &ioHash,Dynamic inKey);
+HXCPP_EXTERN_CLASS_ATTRIBUTES Array< ::Dynamic> __object_hash_keys(Dynamic &ioHash);
+HXCPP_EXTERN_CLASS_ATTRIBUTES Dynamic       __object_hash_values(Dynamic &ioHash);
+// Typed ObjectHash access...
+HXCPP_EXTERN_CLASS_ATTRIBUTES void          __object_hash_set_int(Dynamic &ioHash,Dynamic inKey,int inValue,bool inWeakKey=false);
+HXCPP_EXTERN_CLASS_ATTRIBUTES void          __object_hash_set_string(Dynamic &ioHash,Dynamic inKey,::String inValue,bool inWeakKey=false);
+HXCPP_EXTERN_CLASS_ATTRIBUTES void          __object_hash_set_float(Dynamic &ioHash,Dynamic inKey,Float inValue,bool inWeakKey=false);
+HXCPP_EXTERN_CLASS_ATTRIBUTES int           __object_hash_get_int(Dynamic &ioHash,Dynamic inKey);
+HXCPP_EXTERN_CLASS_ATTRIBUTES ::String      __object_hash_get_string(Dynamic &ioHash,Dynamic inKey);
+HXCPP_EXTERN_CLASS_ATTRIBUTES Float         __object_hash_get_float(Dynamic &ioHash,Dynamic inKey);
+HXCPP_EXTERN_CLASS_ATTRIBUTES ::String      __object_hash_to_string(Dynamic &ioHash);
 
 
 // --- Date --------------------------------------------------------------------------
@@ -216,5 +254,63 @@ inline void __hxcpp_memory_set_ui16(int addr,int v) { *(unsigned short *)(__hxcp
 inline void __hxcpp_memory_set_ui32(int addr,int v) { *(unsigned int *)(__hxcpp_memory+addr) = v; }
 inline void __hxcpp_memory_set_f32(int addr,float v) { *(float *)(__hxcpp_memory+addr) = v; }
 
+// FPHelper conversion
+
+inline void __hxcpp_reverse_endian(int &ioData)
+{
+   ioData =   (((ioData>>24) & 0xff )    )|
+              (((ioData>>16) & 0xff )<<8 )|
+              (((ioData>>8 ) & 0xff )<<16 )|
+              (((ioData    ) & 0xff )<<24  );
+}
+
+
+inline float __hxcpp_reinterpret_le_int32_as_float32(int inInt)
+{
+   #ifdef HXCPP_BIG_ENDIAN
+   __hxcpp_reverse_endian(inInt);
+   #endif
+   return *(float*)(&inInt);
+}
+
+
+inline int __hxcpp_reinterpret_float32_as_le_int32(float inFloat)
+{
+   #ifdef HXCPP_BIG_ENDIAN
+   __hxcpp_reverse_endian(*(int *)&inFloat);
+   #endif
+   return *(int*)(&inFloat);
+}
+
+
+inline double __hxcpp_reinterpret_le_int32s_as_float64(int inLow, int inHigh)
+{
+   int vals[2] = {inLow, inHigh};
+   #ifdef HXCPP_BIG_ENDIAN
+   __hxcpp_reverse_endian(vals[0]);
+   __hxcpp_reverse_endian(vals[1]);
+   #endif
+   return *(double*)(vals);
+}
+
+
+inline int __hxcpp_reinterpret_float64_as_le_int32_low(double inValue)
+{
+   int *asInts = (int *)&inValue;
+   #ifdef HXCPP_BIG_ENDIAN
+   __hxcpp_reverse_endian(asInts[0]);
+   #endif
+   return asInts[0];
+}
+
+
+inline int __hxcpp_reinterpret_float64_as_le_int32_high(double inValue)
+{
+   int *asInts = (int *)&inValue;
+   #ifdef HXCPP_BIG_ENDIAN
+   __hxcpp_reverse_endian(asInts[1]);
+   #endif
+   return asInts[1];
+}
 
 #endif
