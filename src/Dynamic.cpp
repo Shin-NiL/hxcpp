@@ -7,6 +7,10 @@
 #include <stdio.h>
 #endif
 
+#ifdef GCW0
+#include <stdio.h>
+#endif
+
 using namespace hx;
 
 
